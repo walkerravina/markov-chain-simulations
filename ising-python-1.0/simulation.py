@@ -4,8 +4,11 @@ import time
 import sys
 
 def simulation(n, k):
+	"""Run the simulation on a Torus of total size n^2. 
+	For each value of beta perform k simulations
+	"""
 	#vary Beta from small to above critical value
-	f = open('results/ising_model_n=' + str(n), 'w')
+	f = open('results/ising_model_n:' + str(n) + '_time: ' + str(time.time()), 'w')
 	beta = 0.01
 	while beta <= .6:
 		print("Testing Beta = " + str(beta))
@@ -30,10 +33,10 @@ def mix_chains(n, beta):
 	shifts = [(1, 0), (-1, 0), (0, 1), (0, -1)] #"shifts" defining the neighbors of a vertex for the torus
 	while global_diff_count > 0:
 		iterations += 1
-		#pick random vertex
+		#pick vertex and spin uniformly at random
 		v_x, v_y = random.randint(0, n - 1), random.randint(0, n - 1)
 		new_spin = 1
-		if random.random() < 0.5:
+		if random.random() <= 0.5:
 			new_spin = -1
 
 
@@ -64,20 +67,25 @@ def mix_chains(n, beta):
 		q = min(1, math.exp(-1 * beta * (X_change_count - X_count)))
 		r = random.random()
 		if r <= p:
-			Y[v_x][v_y] = spin
+			Y[v_x][v_y] = new_spin
 		#otherwise leave Y the same
 		if r <= q:
-			X[v_x][v_y] = spin
+			X[v_x][v_y] = new_spin
 		#otherwise leave X the same
+		#
 		#update the count diff
 		if started_same and X[v_x][v_y] != Y[v_x][v_y]:
 			global_diff_count += 1
 		elif not started_same and X[v_x][v_y] == Y[v_x][v_y]:
 			global_diff_count -= 1
+
 	return (iterations, time.clock() - start)
 
 
 def main():
+	"""
+	Main method, read in command line arguments and call simulation
+	"""
 	if len(sys.argv) <= 2:
 		print("Must supply n and k")
 	else:
