@@ -72,7 +72,7 @@ def mix_chains(n, beta):
 		if r <= q:
 			X[v_x][v_y] = new_spin
 		#otherwise leave X the same
-		#
+
 		#update the count diff
 		if started_same and X[v_x][v_y] != Y[v_x][v_y]:
 			global_diff_count += 1
