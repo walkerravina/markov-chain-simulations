@@ -35,7 +35,6 @@ def mix_chains(n, beta):
 	global_diff_count = n
 
 	while global_diff_count > 0:
-		print(global_diff_count, beta)
 		iterations += 1
 		#choose a random vertex and spin
 		v = random.randint(0,  n - 1)
