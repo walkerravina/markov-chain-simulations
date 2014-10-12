@@ -25,8 +25,8 @@ def mix_chains(n, beta):
 	Return the number of moves taken as well as the system time
 	"""
 	#we are on the graph K_n so we represent X and Y simply by lists
-	X = [1 for i in range(n)]
-	Y = [-1 for i in range(n)]
+	X = [1 if i % 2 == 0 else - 1 for i in range(n)]
+	Y = [-1 if i % 2 == 0 else 1 for i in range(n)]
 
 	#timing information
 	iterations = 0
@@ -83,7 +83,6 @@ def mix_chains(n, beta):
 			global_diff_count += 1
 		elif not started_same and X[v] == Y[v]:
 			global_diff_count -= 1
-
 
 	return (iterations, time.clock() - start)
 
