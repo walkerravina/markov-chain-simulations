@@ -8,7 +8,7 @@ def simulation(n, k):
 	For each value of beta perform k simulations
 	"""
 	#vary Beta from small to above critical value
-	f = open('results/curie_weiss:' + str(n) + ':' + str(k) + ':time: ' + str(time.time()), 'w')
+	f = open('new_results/curie_weiss:' + str(n) + ':' + str(k) + ':time: ' + str(time.time()), 'w')
 	beta = 0.01
 	while beta <= 2:
 		print("Testing Beta = " + str(beta))

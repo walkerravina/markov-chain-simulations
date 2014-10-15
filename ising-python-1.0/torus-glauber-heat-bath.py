@@ -3,20 +3,22 @@ import math
 import time
 import sys
 
-def simulation(n, k):
+def simulation(n, k, b_low, b_high, b_step):
 	"""Run the simulation on a Torus of total size n^2. 
 	For each value of beta perform k simulations
 	"""
 	#vary Beta from small to above critical value
-	f = open('results/ising_model_n:' + str(n) + '_time: ' + str(time.time()), 'w')
-	beta = 0.01
-	while beta <= .6:
+	file_name = 'new_results/torus-heat-bath:' + str(n) + ':k:' + str(k) + ':beta_low:' + str(b_low) + ':beta_high:'
+	file_name += str(b_high) + ':beta_step:' + str(b_step) + ':time:' + str(time.time())
+	f = open(file_name, 'w')
+	beta = b_low
+	while beta <= b_high:
 		print("Testing Beta = " + str(beta))
-		for i in range(1, k):
+		for i in range(0, k):
 			print(i)
 			iterations, duration = mix_chains(n, beta)
 			f.write(str(beta) + ", " + str(iterations) + ", " + str(duration) + "\n")
-		beta += .01
+		beta += b_step
 	f.close()
 
 def mix_chains(n, beta):
@@ -30,51 +32,43 @@ def mix_chains(n, beta):
 	global_diff_count = n * n
 	X = [[1 for i in range(n)] for j in range(n)]
 	Y = [[-1 for i in range(n)] for j in range(n)]
+
 	shifts = [(1, 0), (-1, 0), (0, 1), (0, -1)] #"shifts" defining the neighbors of a vertex for the torus
+
 	while global_diff_count > 0:
 		iterations += 1
-		#pick vertex and spin uniformly at random
+		#pick vertex uniformly at random
 		v_x, v_y = random.randint(0, n - 1), random.randint(0, n - 1)
-		new_spin = 1
-		if random.random() <= 0.5:
-			new_spin = -1
-
 
 		started_same = (X[v_x][v_y] == Y[v_x][v_y])
 
 		#there are 4 neighbors, using torus here
-		#calc p = Pr(of accepting the change for Y)
-		Y_v_spin = Y[v_x][v_y]
-		#keep a count for \sigma and \sigma' (\sigma' is where v is assigned the new spin)
-		Y_count = 0
-		Y_change_count = 0
+		#determine P(change to +) Y
+		Y_pos_prob = 0
+		local_spin_sum = 0
 		for shift in shifts:
-			if Y[(v_x + shift[0]) % n][(v_y + shift[1]) % n] != new_spin:
-				Y_change_count += 1
-			if Y[(v_x + shift[0]) % n][(v_y + shift[1]) % n] != Y_v_spin:
-				Y_count += 1
+			local_spin_sum += Y[(v_x + shift[0]) % n][(v_y + shift[1]) % n]
 
-		p = min(1, math.exp(-1 * beta * (Y_change_count - Y_count)))
+		Y_pos_prob = math.exp(beta * local_spin_sum) / (math.exp(beta * local_spin_sum ) + math.exp(-1 * beta * local_spin_sum) )
 
-		#calc q = Pr(of accepting the change for X)
-		X_v_spin = X[v_x][v_y]
-		X_count = 0
-		X_change_count = 0
+		#determine P(change to +) for X
+		X_pos_prob = 0
+		local_spin_sum = 0
+
 		for shift in shifts:
-			if X[(v_x + shift[0]) % n][(v_y + shift[1]) % n] != new_spin:
-				X_change_count += 1
-			if X[(v_x + shift[0]) % n][(v_y + shift[1]) % n] != X_v_spin:
-				X_count += 1
+			local_spin_sum += X[(v_x + shift[0]) % n][(v_y + shift[1]) % n]
 
-		q = min(1, math.exp(-1 * beta * (X_change_count - X_count)))
+		X_pos_prob = math.exp(beta * local_spin_sum) / (math.exp(beta * local_spin_sum ) + math.exp(-1 * beta * local_spin_sum) )
 		r = random.random()
 		
-		if r <= p:
-			Y[v_x][v_y] = new_spin
-		#otherwise leave Y the same
-		if r <= q:
-			X[v_x][v_y] = new_spin
-		#otherwise leave X the same
+		if r <= Y_pos_prob:
+			Y[v_x][v_y] = 1
+		else:
+			Y[v_x][v_y] = -1
+		if r <= X_pos_prob:
+			X[v_x][v_y] = 1
+		else:
+			X[v_x][v_y] = -1
 
 		#update the count diff
 		if started_same and X[v_x][v_y] != Y[v_x][v_y]:
@@ -88,10 +82,12 @@ def mix_chains(n, beta):
 def main():
 	"""
 	Main method, read in command line arguments and call simulation
+	Command Line Args are:
+	size, iterations per beta, lower beta, uper beta, step beta
 	"""
-	if len(sys.argv) <= 2:
-		print("Must supply n and k")
+	if len(sys.argv) < 6 :
+		print("Must supply n, k, b_low, b_high, b_step space delimited")
 	else:
-		simulation(int(sys.argv[1]), int(sys.argv[2]))
+		simulation(int(sys.argv[1]), int(sys.argv[2]), float(sys.argv[3]), float(sys.argv[4]), float(sys.argv[5]))
 
 main()
