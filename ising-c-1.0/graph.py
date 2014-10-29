@@ -37,7 +37,7 @@ def make_custom_graph():
 		lines = f.readlines()
 		d = {}
 		for line in lines:
-			l = line.split(",")
+			l = line.split(" ")
 			if float(l[0]) in d.keys():
 				d[float(l[0])].append(int(l[1]))
 			else:
@@ -57,7 +57,7 @@ def make_custom_graph():
 		plt.plot(file_map[key][0], file_map[key][1], '-o', label=key.split(':')[0])
 
 	plt.legend(loc=2)
-	plt.axis([0.38, 0.45, -100000, 85000000])
+	#plt.axis([0.38, 0.45, -100000, 85000000])
 	plt.xlabel("Beta")
 	plt.ylabel("Iterations")
 	plt.show()

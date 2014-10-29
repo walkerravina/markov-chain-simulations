@@ -8,7 +8,7 @@ def simulation(n, k, b_low, b_high, b_step):
 	For each value of beta perform k simulations
 	"""
 	#vary Beta from small to above critical value
-	file_name = 'new_results/torus-heat-bath:' + str(n) + ':k:' + str(k) + ':beta_low:' + str(b_low) + ':beta_high:'
+	file_name = 'results/torus-heat-bath:' + str(n) + ':k:' + str(k) + ':beta_low:' + str(b_low) + ':beta_high:'
 	file_name += str(b_high) + ':beta_step:' + str(b_step) + ':time:' + str(time.time())
 	f = open(file_name, 'w')
 	beta = b_low
