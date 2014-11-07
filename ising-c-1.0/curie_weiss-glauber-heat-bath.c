@@ -78,7 +78,7 @@ int mix_chains(int n, double alpha){
 	int Y_pos_total = 0;
 	int global_diff_count = n;
 
-	int	iterations = 0;
+	unsigned long long iterations = 0;
 	// +1 / -1 for spins
 
 	int v, spin_sum, started_same;
@@ -108,7 +108,6 @@ int mix_chains(int n, double alpha){
 		else{
 			spin_sum = X_pos_total - (n - X_pos_total - 1);
 		}
-
 
 		X_pos_prob = exp(alpha / n * spin_sum) / (exp(alpha / n * spin_sum) + exp(-1 * alpha / n * spin_sum));
 
