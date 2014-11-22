@@ -23,6 +23,7 @@ int main(int argc, char *argv[]){
 	double lambda_low = atof(argv[3]);
 	double lambda_high = atof(argv[4]);
 	double lambda_step = atof(argv[5]);
+	srand(time(NULL));
 	simulation(n, k, lambda_low, lambda_high, lambda_step);
 
 }
@@ -92,13 +93,13 @@ int mix_chains(int n, double lambda){
 	while (global_diff_count > 0){
 
 		iterations += 1;
-		v_x = arc4random_uniform(n);
-		v_y = arc4random_uniform(n);
+		v_x = rand() % n;
+		v_y = rand() % n;
 		started_same = X[v_x][v_y] - Y[v_x][v_y];
 
 		occupation_prob = lambda / (lambda + 1);
 
-		r = ((double)arc4random() / ARC4RANDOM_MAX);
+		r = (float)rand()/(float)RAND_MAX;
 		
 		if (r <= occupation_prob){
 			//check the neighbors to ensure valid IS
