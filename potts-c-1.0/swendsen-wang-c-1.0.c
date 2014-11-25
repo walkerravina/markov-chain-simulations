@@ -10,12 +10,9 @@ typedef struct lnode{
 } lnode;
 
 void simulation(int n, int k, int q, double c_low, double c_high, double c_step);
-int run_chain(int n, int q, double c, int* spin_assignments, lnode** spin_array, int* spin_counts, lnode** edge_set);
+int run_chain(int n, int q, double c, int** spin_assignments, int** visited, lnode*** spin_array, lnode* stk, int* spin_counts);
 void llist_add(lnode* head, int val);
-void edge_set_add(lnode** edge_set, int i, int j);
 int llist_pop(lnode* head);
-int edge_set_find(lnode** edge_set, int i, int j);
-void clean_data_structures(lnode** edge_set, lnode** spin_array, int* spin_counts, int n, int q);
 
 
 /**
@@ -57,34 +54,27 @@ void simulation(int n, int k, int q, double c_low, double c_high, double c_step)
 		printf("Error opening results file");
 		exit(1);
 	}
-	//initialize an array to keep track of the number of vertexes with each spin
-	//and an array to keep track of the count of vertexes with each spin
-	lnode** spin_array = malloc(q * sizeof(lnode));
-	int* spin_counts = malloc(q * sizeof(int));
-	for(int i = 0; i < q; i++){
-		//use a sentinel for llists
-		spin_array[i] = malloc(sizeof(lnode));
-		spin_array[i]->next = NULL;
-		spin_array[i]->val = -1;
-		spin_counts[i] = 0;
+	int** spin_assignments = malloc(2 * sizeof(int*));
+	int** visited = malloc(2 * sizeof(int*));
+	lnode*** spin_array = malloc(2 * sizeof(lnode**));
+	int* spin_counts = malloc(n * sizeof(int));
+	for(int i = 0; i < 2; i++){
+		spin_assignments[i] = malloc(n * sizeof(int));
+		visited[i] = malloc(n * sizeof(int));
+		spin_array[i] = malloc(q * sizeof(lnode*));
+		for(int j = 0; j < q; j++){
+			spin_array[i][j] = malloc(sizeof(lnode));
+			spin_array[i][j]->next = NULL;
+			spin_array[i][j]->val = -1; 
+			spin_counts[j] = 0;
+		}
 	}
-	//edge set serves as a hash set for tracking which edges have been removed in phase one of swendsen wang
-	//there are n buckets, each vertex i has a bucket with a list of vertexes such that edge (i, j) has been removed
-	//for each vertex j in the bucket. When an edge (a, b) is added to the set the bucket which is used is for the lower id vertex
-	//edges should be checked for membership in a similar way
-	lnode** edge_set = malloc(n * sizeof(lnode));
-	int* spin_assignments = malloc(n * sizeof(int));
-	for(int i = 0; i < n; i++){
-		edge_set[i] = malloc(sizeof(lnode));
-		//use a sentinel
-		edge_set[i]->val = 0;
-		edge_set[i]->next = NULL;
-		spin_assignments[i] = 0;
-	}
+	lnode* stk = malloc(sizeof(lnode));
+	stk->next = NULL;
+	stk->val = -1;
 	while(c <= c_high){
 		for(int i = 0; i < k; i++){
-			clean_data_structures(edge_set, spin_array, spin_counts, n, q);
-			iterations = run_chain(n, q, c, spin_assignments, spin_array, spin_counts, edge_set);
+			iterations = run_chain(n, q, c, spin_assignments, visited, spin_array, stk, spin_counts);
 			fprintf(f, "%f %d\n", c, iterations);
 			printf("c: %f, k: %d, iterations: %d\n", c, i, iterations);
 		}
@@ -94,107 +84,89 @@ void simulation(int n, int k, int q, double c_low, double c_high, double c_step)
 }
 
 /**
- * Run a chain starting at the type vector T such that T[i] = 1/q for all i
- * that is the equal distribution type vector. We run the swendsen wang process
- * until the type vector becomes T' such that T'[k] = (q-1)/2 and T' [i!=k] = 1/(q(q-1))
- * that is the type vector where one spin dominates
- * @param  n    The number of vertexes defining the complete graph
- * @param  q    The number of spins
- * @param  c The c in the k=c/n value for the coupling constant
- * @param  spin_array Array of linked lists for keeping track of vertexes with each spin
- * @param  spin_counts Array of integers for keeping track of count of vertexes with each spin
- * @param  edge_set Hash table for keeping track of removed edges
- * @return      The number of iterations required to reach the desired Type vector
+ * Run the chain until in passes from the type configuration of equal spins to the type configuration of one dominant spin
+ * @param  n                The number of vertexes
+ * @param  q                The number of spins
+ * @param  c                The value of c in the coupling constant 
+ * @param  spin_assignments 2-d array holding the spin assignments for each vertex for the current and next iterations
+ * @param  visited          2-d array holding the visited state for each vertex for the current and next iterations	
+ * @param  spin_array       2-d array of linked lists holding the vertexes within each spin class
+ * @param  stk              stack pointer for the dfs
+ * @param  spin_counts      int array for tracking the number of vertexes with each spin on this iteration
+ * @return                  The number of iterations required to pass between the two type vectors
  */
-int run_chain(int n, int q, double c, int* spin_assignments, lnode** spin_array, int* spin_counts, lnode** edge_set){
-	int spin = 0; //spins range from 0 to q-1 for easy indexing
-	int i = 0, j = 0, k = 0;
-	//initialize the system to the first type vector
+int run_chain(int n, int q, double c, int** spin_assignments, int** visited, lnode*** spin_array, lnode* stk, int* spin_counts){
+	int spin = 0, i = 0, j = 0, k = 0, current = 0, next = 1, equal_spin_count = 0, temp = 0, iterations = 0;
+	double p = 1 - exp(-1 * c / n);
+	//initialize 
 	for(i = 0; i < n; i++){
-		spin = i % 3;
-		spin_counts[spin]++;
-		spin_assignments[i] = spin;
-		llist_add(spin_array[spin], i);
-	}
-	int dom_spin_count = 0, other_spin_count = 0, iterations = 0;
-	double p = exp(-1 * c / n);//probability of removing an edge
-	lnode* v1 = NULL; lnode* curr = NULL; lnode* stk = malloc(sizeof(lnode));
-	//stk is for dfs, again we use a sentinel node
-	stk->val = -1;
-	stk->next = NULL;
-	while(!(dom_spin_count == 1 && other_spin_count == q - 1)){
-		iterations++;
-		//remove edges
-		//for each spin group
-		for(i = 0; i < q; i++){
-			//for each unordered pair of vertexes (i.e each edge) in that group
-			//remove that edge with the proper probability, we shrink the list as we go
-			while(spin_array[i]->next != NULL){
-				v1 = spin_array[i]->next;
-				curr = v1->next;
-				while(curr != NULL){
-					if(((double)arc4random() / ARC4RANDOM_MAX) <= p){
-						edge_set_add(edge_set, v1->val, curr->val);
-					}
-					curr = curr->next;
-				}
-				spin_array[i]->next = spin_array[i]->next->next;
-				free(v1);
-			}
-			//reset spin counts
-			spin_counts[i] = 0;
+		if(i < (q - 1) / (double)q * n ){
+			spin = 0;
 		}
-		//perform DFS to randomly assign a spin to each connected component
-		//edge set doubles as a visited list with the sentinel nodes values tracking
-		//whether the node has been visited
-		for(i = 0; i < n; i++){
-			if(edge_set[i]->val){
-				continue;
-			}
-			//chose a random spin for this connected component
-			spin = arc4random_uniform(q);
-			llist_add(stk, i);
-			while(stk->next != NULL){
-				j = llist_pop(stk);
-				if(edge_set[j]->val){
+		else if ((q - 1) / (double)q * n <= i && i < (q - 1) / (double)q * n + n / ((q-1) * (double) q)){
+			spin = 1;
+		}
+		else{
+			spin = 2;
+		}
+		spin_assignments[current][i] = spin;
+		visited[current][i] = 0;
+		visited[next][i] = 0;
+		llist_add(spin_array[current][spin], i);
+	}
+
+	while(!(equal_spin_count == q)){
+		iterations++;
+		//for each spin class
+		for(i = 0; i < q; i++){
+			//create the components for that spin class
+			while(spin_array[current][i]->next != NULL){
+				j = llist_pop(spin_array[current][i]);
+				if(visited[current][j]){
 					continue;
 				}
-				edge_set[j]->val = 1;
-				llist_add(spin_array[spin], j);
-				spin_counts[spin]++;
-				for(k = 0; k < n; k++){
-					//if this node has already been visited, or the edge is not actually there then skip
-					//otherwise push onto the stk
-					if(k == j ||  edge_set[k]->val == 1 || spin_assignments[k] != spin_assignments[j] || edge_set_find(edge_set, j, k) == 1 ){
+				//start the dfs for this new component, pick the spin at random
+				spin = arc4random_uniform(q);
+				llist_add(stk, j);
+				while(stk->next != NULL){
+					j = llist_pop(stk);
+					if(visited[current][j]){
 						continue;
 					}
-					spin_assignments[j] = spin;
-					llist_add(stk, k);
+					//mark vertex as visited an update information for the next round
+					visited[current][j] = 1;
+					visited[next][j] = 0;
+					llist_add(spin_array[next][spin], j);
+					spin_assignments[next][j] = spin;
+					spin_counts[spin]++;
+					//for each edge push the neighbor on with the proper probability
+					for(k = 0; k < n; k++){
+						if(k != j && visited[current][k] == 0 && spin_assignments[current][j] == spin_assignments[current][k] 
+							&& ((double)arc4random() / ARC4RANDOM_MAX) <= p){
+							llist_add(stk, k);
+						}
+					}
 				}
 			}
 		}
-		//reset visited list for next iteration
-		for(i = 0; i < n; i++){
-			if(iterations == 1){
-				curr = edge_set[i];
-				printf("slot %d: \n",i );
-				while(curr != NULL){
-					printf("%d, \n", curr->val);
-					curr = curr->next;
-				}
-				printf("\n");
-			}
-			edge_set[i]->val = 0;
-		}
-		dom_spin_count = 0; other_spin_count = 0;
+		equal_spin_count = 0;
 		//check if we have passed to type 2 configuration
 		for(i = 0; i < q; i++){
-			if(spin_counts[i] == n * (q-1) / q){
-				dom_spin_count++;
+			if(spin_counts[i] == n / q){
+				equal_spin_count++;
 			}
-			else if(spin_counts[i] == n / (q*(q-1)) ){
-				other_spin_count++;
-			}
+			//reset for next round
+			spin_counts[i] = 0;
+		}
+		//swap current and next
+		temp = current;
+		current = next;
+		next = temp;
+	}
+	//clear spin array before returning
+	for(i = 0; i < q; i++){
+		while(spin_array[current][i]->next != NULL){
+			llist_pop(spin_array[current][i]);
 		}
 	}
 	return iterations;
@@ -223,74 +195,4 @@ int llist_pop(lnode* head){
 	head->next = head->next->next;
 	free(ref);
 	return ret;
-}
-
-/**
- * Add the given (i, j) edge to our edge set
- * Edge is bucketed under a = min(i,j) with b = max(i,j) added to the linked list in that bucket
- * @param edge_set Pointer to the edge set
- * @param i        vertex 1
- * @param j        vertex 2
- */
-void edge_set_add(lnode** edge_set, int i, int j){
-	lnode* head;
-	lnode* new_node = malloc(sizeof(lnode));
-	int lower = j, higher = i;
-	if(i < j){
-		lower = i;
-		higher = j;
-	}
-	head = edge_set[lower];
-	new_node->val = higher;
-	new_node->next = head->next;
-	head->next = new_node;
-}
-
-/**
- * Determine whether the specified edge is contained in our edge set
- * after being checked an edge is removed since it will only need to be checked once
- * @param  edge_set Pointer to the edge set
- * @param  i        vertex 1
- * @param  j        vertex 2
- * @return          1 if edge is in the set, 0 otherwise
- */
-int edge_set_find(lnode** edge_set, int i, int j){
-	int lower = j, higher = i;
-	if(i < j){
-		lower = i;
-		higher = j;
-	}
-	lnode* prev = edge_set[lower];
-	lnode* curr = edge_set[lower]->next;
-	while(curr != NULL){
-		//1st time reading this edge
-		if(curr->val == higher){
-			prev->next = curr->next;
-			free(curr);
-			return 1;
-		}
-		prev = curr;
-		curr = curr->next;
-	}
-	return 0;
-}
-
-/**
- * Clean all of the data structures for the next run
- * @param edge_set    the edge_set
- * @param spin_array  the spin array
- * @param spin_counts the spin counts array
- * @param n           the number of vertexes
- * @param q           the number of spins
- */
-void clean_data_structures(lnode** edge_set, lnode** spin_array, int* spin_counts, int n, int q){
-	for(int i = 0; i < q; i++){
-		spin_array[i]->next = NULL;
-		spin_array[i]->val = -1;
-		spin_counts[i] = 0;
-	}
-	for(int i = 0; i < n; i++){
-		edge_set[i]->val = 0;
-		edge_set[i]->next = NULL;
-	}
 }
