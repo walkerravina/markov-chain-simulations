@@ -29,7 +29,7 @@ int main(int argc, char *argv[]){
 
 /**
  * Run the simulation with the specified parameters. Note that here c/n is used in the partition function,
- * as tge coupling constant
+ * as the coupling constant
  * @param n      The size of the graph (complete graph) n= vertex count
  * @param k      The number of iterations for each c
  * @param c_low  The c to begin with
@@ -40,7 +40,7 @@ void simulation(int n, int k, double c_low, double c_high, double c_step){
 	double c = c_low;
 	int iterations;
 	char file_name[100];
-	sprintf(file_name, "results/curie-weiss-heat-bath:%d:%d:%f:%f:%f:%d", n, k, c_low, c_high, c_step, (unsigned)time(NULL));
+	sprintf(file_name, "results/glauber-metropolis-%d-%d-%f-%f-%f-%d", n, k, c_low, c_high, c_step, (unsigned)time(NULL));
 	FILE *f = fopen(file_name, "w");
 	if(NULL == f){
 		printf("Error opening results file");
@@ -58,90 +58,83 @@ void simulation(int n, int k, double c_low, double c_high, double c_step){
 }
 
 /**
- * Run q chains each starting at a configuration in which all of the vertexes are the same color
+ * Run 3 chains (q=3) each starting at a configuration in which all of the vertexes have the same spin
  * @param  n     The size of the chains
  * @param  c The c for the partition function
  * @return       The iterations needed for mixing
  */
 int mix_chains(int n, double c){
-	//we are on the graph K_n so we represent X and Y by two lists and counts for bookkeeping
+	//we are on the graph K_n so we represent X, Y, Z by lists and type vectors
 	int X[n];
 	int Y[n];
+	int Z[n];
+	int X_type[3];
+	int Y_type[3];
+	int Z_type[3];
 
 	for(int i = 0; i < n; i++){
-		X[i] = 1;
-		Y[i] = -1;
+		X[i] = 0;
+		Y[i] = 1;
+		Z[i] = 2;
 	}
-
-	int X_pos_total = n;
-	int Y_pos_total = 0;
-	int global_diff_count = n;
+	for(int i = 0; i < 3; i++){
+		X_type[i] = 0;
+		Y_type[i] = 0;
+		Z_type[i] = 0;
+	}
+	X_type[0] = n;
+	Y_type[1] = n;
+	Z_type[2] = n;
 
 	unsigned long long iterations = 0;
 	// +1 / -1 for spins
 
-	int v, spin_sum, started_same;
-	double Y_pos_prob, X_pos_prob, r;
-
-	while (global_diff_count > 0){
-
+	double X_prob, Y_prob, Z_prob, r;
+	int not_done = 1, new_spin = 0, old_spin = 0, v= 0;
+	//run the chains until the type vectors match up
+	while (not_done){
+		not_done = 0;
+		for(int i = 0; i < 3; i++){
+			if(X[i] == Y[i] && X[i] == Z[i]){
+				continue;
+			}
+			else{
+				not_done = not_done | 1;
+			}
+		}
 		iterations += 1;
 		v = arc4random_uniform(n);
-		started_same = X[v] - Y[v];
+		new_spin = arc4random_uniform(3);
 
-		//calculate the probability of the vertex being positive with Glauber for both chains
-
-		if(Y[v] == 1){
-			spin_sum = Y_pos_total - 1 - (n - Y_pos_total);
-		}
-		else{
-			spin_sum = Y_pos_total - (n - Y_pos_total - 1);
-		}
-		
-		Y_pos_prob = exp(c / n * spin_sum) / (exp(c / n * spin_sum) + exp(-1 * c / n * spin_sum));
-
-
-		if(X[v] == 1){
-			spin_sum = X_pos_total - 1 - (n - X_pos_total);		
-		}
-		else{
-			spin_sum = X_pos_total - (n - X_pos_total - 1);
-		}
-
-		X_pos_prob = exp(c / n * spin_sum) / (exp(c / n * spin_sum) + exp(-1 * c / n * spin_sum));
+		//make the move with the proper probability in each chain according to the metropolis rule		
 
 		r = ((double)arc4random() / ARC4RANDOM_MAX);
-		
-		if (r <= Y_pos_prob){
-			if(Y[v] != 1){
-				Y_pos_total += 1;
-			}	
-			Y[v] = 1;
-		}
-		else{
-			if(Y[v] == 1){
-				Y_pos_total -= 1;
-			}
-			Y[v] = -1;		
-		}
 
-		if (r <= X_pos_prob){
-			if(X[v] != 1){
-				X_pos_total += 1;
-			}
-			X[v] = 1;			
+		old_spin = X[v];
+		X_prob = X_type[new_spin] - (X_type[old_spin] - 1);
+		X_prob = exp(c / n * X_prob);
+		if(r <= X_prob){
+			X[v] = new_spin;
+			X_type[old_spin]--;
+			X_type[new_spin]++;
 		}
-		else{
-			if (X[v] == 1){
-				X_pos_total -= 1;
-			}
-			X[v] = -1;			
-		}
-		if(started_same == 0 && X[v] != Y[v]){
-			global_diff_count += 1;
-		}
-		else if(started_same != 0 && X[v] == Y[v]){
-			global_diff_count -= 1;
+				
+		old_spin = Y[v];
+		Y_prob = Y_type[new_spin] - (Y_type[old_spin] - 1);
+		Y_prob = exp(c / n * Y_prob);
+		if(r <= Y_prob){
+			Y[v] = new_spin;
+			Y_type[old_spin]--;
+			Y_type[new_spin]++;
+		}	
+
+		old_spin = Z[v];
+		Z_prob = Z_type[new_spin] - (Z_type[old_spin] - 1);
+		Z_prob = exp(c / n * Z_prob);
+		if(r <= Z_prob){
+			Z[v] = new_spin;
+			Z_type[old_spin]--;
+			Z_type[new_spin]++;
 		}
 	}
 

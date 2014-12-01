@@ -9,8 +9,8 @@ typedef struct lnode{
 	int val;
 } lnode;
 
-void simulation(int n, int k, int q, double c_low, double c_high, double c_step);
-int run_chain(int n, int q, double c, int** spin_assignments, int** visited, lnode*** spin_array, lnode* stk, int* spin_counts);
+void simulation(int n, int k,  double c_low, double c_high, double c_step);
+int run_chain(int n, double c, int** spin_assignments, int** visited, lnode*** spin_array, lnode* stk, int* spin_counts);
 void llist_add(lnode* head, int val);
 int llist_pop(lnode* head);
 
@@ -22,33 +22,32 @@ int llist_pop(lnode* head);
  * @return      not used
  */
 int main(int argc, char *argv[]){
-	if (argc != 7){
-		printf("Must supply n, k, q, c_low, c_high, c_step space delimited");
+	if (argc != 6){
+		printf("Must supply n, k, c_low, c_high, c_step space delimited");
 	}
 	int n = atoi(argv[1]);
 	int k = atoi(argv[2]);
-	int q = atoi(argv[3]);
-	double c_low = atof(argv[4]);
-	double c_high = atof(argv[5]);
-	double c_step = atof(argv[6]);
-	simulation(n, k, q, c_low, c_high, c_step);
+	double c_low = atof(argv[3]);
+	double c_high = atof(argv[4]);
+	double c_step = atof(argv[5]);
+	simulation(n, k, c_low, c_high, c_step);
 
 }
 
 /**
  * Run the simulation with the specified parameters. Note that here k=c/n is used in the partition function
  * @param n      The size of the graph (complete graph) n= vertex count
- * @param q  	 The number of spins
  * @param k      The number of iterations for each c
  * @param c_low  The c to begin with
  * @param c_high The c to end with
  * @param c_step The c to step with 
  */
-void simulation(int n, int k, int q, double c_low, double c_high, double c_step){
+void simulation(int n, int k, double c_low, double c_high, double c_step){
+	int q = 3;
 	double c = c_low;
 	int iterations;
 	char file_name[100];
-	sprintf(file_name, "results/swendsen-wang-%d-%d-%d-%f-%f-%f-%d", n, q, k, c_low, c_high, c_step, (unsigned)time(NULL));
+	sprintf(file_name, "results/swendsen-wang-%d-%d-%d-%f-%f-%f-%d", n, 3, k, c_low, c_high, c_step, (unsigned)time(NULL));
 	FILE *f = fopen(file_name, "w");
 	if(NULL == f){
 		printf("Error opening results file");
@@ -74,7 +73,7 @@ void simulation(int n, int k, int q, double c_low, double c_high, double c_step)
 	stk->val = -1;
 	while(c <= c_high){
 		for(int i = 0; i < k; i++){
-			iterations = run_chain(n, q, c, spin_assignments, visited, spin_array, stk, spin_counts);
+			iterations = run_chain(n, c, spin_assignments, visited, spin_array, stk, spin_counts);
 			fprintf(f, "%f %d\n", c, iterations);
 			printf("c: %f, k: %d, iterations: %d\n", c, i, iterations);
 		}
@@ -84,9 +83,8 @@ void simulation(int n, int k, int q, double c_low, double c_high, double c_step)
 }
 
 /**
- * Run the chain until in passes from the type configuration of equal spins to the type configuration of one dominant spin
+ * Run the chain until in passes from the type configuration of one dominant spin to all equal distribution of spins
  * @param  n                The number of vertexes
- * @param  q                The number of spins
  * @param  c                The value of c in the coupling constant 
  * @param  spin_assignments 2-d array holding the spin assignments for each vertex for the current and next iterations
  * @param  visited          2-d array holding the visited state for each vertex for the current and next iterations	
@@ -95,7 +93,8 @@ void simulation(int n, int k, int q, double c_low, double c_high, double c_step)
  * @param  spin_counts      int array for tracking the number of vertexes with each spin on this iteration
  * @return                  The number of iterations required to pass between the two type vectors
  */
-int run_chain(int n, int q, double c, int** spin_assignments, int** visited, lnode*** spin_array, lnode* stk, int* spin_counts){
+int run_chain(int n, double c, int** spin_assignments, int** visited, lnode*** spin_array, lnode* stk, int* spin_counts){
+	int q = 3;
 	int spin = 0, i = 0, j = 0, k = 0, current = 0, next = 1, equal_spin_count = 0, temp = 0, iterations = 0;
 	double p = 1 - exp(-1 * c / n);
 	//initialize 
